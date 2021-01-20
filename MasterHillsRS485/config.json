@@ -1,0 +1,25 @@
+{
+    "name": "MasterHills HA RS485 Addon",
+    "version": "0.0.3",
+    "slug": "masterhills_wallpad",
+    "description": "Wallpad addon for MasterHills",
+    "arch": ["armhf", "armv7", "aarch64", "amd64", "i386"],
+    "startup": "application",
+    "boot": "auto",
+    "options": {
+        "RS485_IP": null,
+        "RS485_PORT": 8899,
+        "MQTT_IP": null,
+        "MQTT_USER": null,
+        "MQTT_PASSWD": null,
+        "LOG_LEVEL": "info"
+    },
+    "schema": {
+        "RS485_IP": "str",
+        "RS485_PORT": "int",
+        "MQTT_IP": "str",
+        "MQTT_USER": "str",
+        "MQTT_PASSWD": "str",
+        "LOG_LEVEL": "list(warn|info|debug)"
+    }
+  }
