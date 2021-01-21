@@ -693,5 +693,5 @@ if __name__ == '__main__':
     daemon = Daemon()
     if daemon.init() == False:
         logging.warn("Initilization failed.")
-        return
-    daemon.run()
+    else:
+        daemon.run()
