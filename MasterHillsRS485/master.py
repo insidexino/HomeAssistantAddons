@@ -14,6 +14,41 @@ import paho.mqtt.client as mqtt
 
 SW_VERSION = 'Masterhills SmartHome v1.0'
 
+class RS485Sock(socket.socket):
+    def __init__(self, *args, **kwargs):
+        super(RS485Sock, self).__init__(*args, **kwargs)
+
+    def connect(self):
+        self.settimeout(10)
+        try:
+            super(RS485Sock, self).connect((config['RS485_IP'], config['RS485_PORT']))
+        except Exception as e:
+            logging.info('Failed to connect RS485 socket.[{}][{}:{}]'.format(e, config['RS485_IP'], config['RS485_PORT']))
+            return False
+        logging.info('Connected to RS485 socket.')
+        self.settimeout(None)
+
+    def recv(self):
+        while True:
+            try:
+                data = super(RS485Sock, self).recv(1)
+                return data
+            except Exception as e:
+                logging.error("RS485 socket receive error. :" + str(e))
+                logging.info("Try Reconnect")
+                self.connect()
+
+    def send(self, data):
+        while True:
+            try:
+                super(RS485Sock, self).send(data)
+                return
+            except Exception as e:
+                logging.error("RS485 socket send error. :" + str(e))
+                logging.info("Try Reconnect")
+                self.connect()
+
+
 class Device():
     def __init__(self, name):
         self.device_name = name
@@ -106,6 +141,7 @@ class ThermostatDevice(Device):
             'target_temp': self.target_temp,
             'current_temp': self.current_temp
         }
+        logging.info("Send MQTT Thermostat {} : {}".format(self.thermostat_group.group_name, str(payload)))
         mqttc.publish(self.state_command, json.dumps(payload))
 
     def SetTargetTemp(self, target_temp):
@@ -356,10 +392,10 @@ class DeviceLightGroup(DeviceGroup):
         for x in range(append_len):
             value += '0'
 
+        logging.info("Send MQTT Light {} : {}".format(self.group_name, value))
         p = MSPacket()
         p.GeneratePacket(self.packet_id, value)
         rs485_sock.send(bytearray.fromhex(p.get_packet()))
-        logging.info(p.get_packet())
 
     def ProcessGroupPacket(self, packet):
         if packet.get_dev_part() == self.packet_id:
@@ -532,14 +568,12 @@ class Daemon():
         self.home.AddDeviceGroup(guestroom)
 
 
-        logging.info(str(self.home))
-
     def init(self):
 
         global mqttc
         global rs485_sock 
         mqttc = mqtt.Client()
-        rs485_sock = socket.socket()
+        rs485_sock = RS485Sock()
 
         mqttc.on_message = self.on_message
         mqttc.on_connect = self.on_connect
@@ -550,14 +584,7 @@ class Daemon():
         mqttc.connect(config['MQTT_IP'], 1883, 60)
         mqttc.loop_start()
 
-        rs485_sock.settimeout(10)
-        try:
-            rs485_sock.connect((config['RS485_IP'], config['RS485_PORT']))
-        except Exception as e:
-            logging.info('Failed to connect RS485 socket.[{}][{}:{}]'.format(e, config['RS485_IP'], config['RS485_PORT']))
-            return False
-        logging.info('Connected to RS485 socket.')
-        rs485_sock.settimeout(None)
+        rs485_sock.connect()
 
         t = threading.Thread(target = self.state_loop)
         t.start()
@@ -607,8 +634,8 @@ class Daemon():
         
         self.home.AppendMQTTList(subscribe_list, publish_list)
        
-        logging.info(subscribe_list)
-        logging.info(publish_list)
+        logging.debug(subscribe_list)
+        logging.debug(publish_list)
         mqttc.subscribe(subscribe_list)
         for ha in publish_list:
             for topic, payload in ha.items():
@@ -632,11 +659,7 @@ class Daemon():
         packet = ''
         start_flag = False
         while True:
-            try:
-                raw_data = rs485_sock.recv(1)
-            except Exception as e:
-                logging.error("RS485 socket error. :" + str(e))
-                break
+            raw_data = rs485_sock.recv()
 
             hex_d = raw_data.hex()
             start_hex = 'aa'
@@ -649,7 +672,7 @@ class Daemon():
                 chksum = self.check_sum(packet)
                 if chksum[0]:
                     self.tick = time.time()
-                    logging.debug("[Packet received]{}".format(packet))
+                    logging.debug("[Packet received] {}".format(packet))
                     self.packet_process(packet)
                 packet = ''
                 start_flag = False
@@ -669,15 +692,11 @@ if __name__ == '__main__':
     if not os.path.isdir(log_dir):
         os.mkdir(log_dir)
 
-    print(conf_path)
-
     try:
         with open(conf_path, 'r') as f:
             config = json.load(f, object_pairs_hook=collections.OrderedDict)
     except FileNotFoundError as e:
         print("[ERROR] Cannot open configuration file")
-
-    print(config['RS485_IP'])
 
     log_path = str(log_dir + '/addon.log')
 
