@@ -371,9 +371,6 @@ class DeviceLightGroup(DeviceGroup):
                 else:
                     dev.state_on = False
                     dev.SetMQTTState('off')
-        # else:
-            # logging.info('received pack = ' + packet.get_dev_part() + ' : cur packet_id = ' + self.packet_id)
-
 
 class Home():
     def __init__(self):
@@ -414,7 +411,6 @@ class Home():
         for group in self.group_list:
             group.GetCurrentState()
  
-
 
 class MSPacket():
     def __init__(self):
@@ -545,33 +541,14 @@ class Daemon():
         mqttc = mqtt.Client()
         rs485_sock = socket.socket()
 
-        # self.mqtt_config = {}
-
-        # get_conf_mqtt = config.items(CONF_MQTT)
-        # for item in get_conf_mqtt:
-            # self.mqtt_config.setdefault(item[0], item[1])
-            # logging.info('[CONFIG] {} {} : {}'.format(CONF_MQTT, item[0], item[1]))
-
-
         mqttc.on_message = self.on_message
         mqttc.on_connect = self.on_connect
         mqttc.on_disconnect = self.on_disconnect
 
-        # if self.mqtt_config['anonymous'] != 'True':
-            # if self.mqtt_config['server'] == '' or self.mqtt_config['username'] == '' or self.mqtt_config['password'] == '':
-                # logging.info('{} 설정을 확인하세요. self.mqtt_config[{}] ID[{}] PW[{}] Device[{}]'.format(CONF_MQTT, self.mqtt_config['server'], self.mqtt_config['username'], self.mqtt_config['password'], 'kocom'))
-                # return False
         mqttc.username_pw_set(username=config['MQTT_USER'], password=config['MQTT_PASSWD'])
-            # logging.debug('{} STATUS. Server[{}] ID[{}] PW[{}] Device[{}]'.format(CONF_MQTT, self.mqtt_config['server'], self.mqtt_config['username'], self.mqtt_config['password'], 'kocom'))
-        # else:
-            # logging.debug('{} STATUS. Server[{}] Device[{}]'.format(CONF_MQTT, self.mqtt_config['server'], 'kocom'))
 
         mqttc.connect(config['MQTT_IP'], 1883, 60)
         mqttc.loop_start()
-
-
-        # server = config.get(CONF_SERVER_485, 'ip')
-        # port = config.get(CONF_SERVER_485, 'port')
 
         rs485_sock.settimeout(10)
         try:
@@ -581,7 +558,6 @@ class Daemon():
             return False
         logging.info('Connected to RS485 socket.')
         rs485_sock.settimeout(None)
-
 
         t = threading.Thread(target = self.state_loop)
         t.start()
@@ -646,9 +622,7 @@ class Daemon():
         return (True, chk_sum) if chk_sum == orgin_sum else (False, chk_sum)
 
 
-
     def packet_process(self, rawdata):
-
         p = MSPacket()
         p.SetPacket(rawdata)
         self.home.ProcessPacket(p)
@@ -705,9 +679,6 @@ if __name__ == '__main__':
 
     print(config['RS485_IP'])
 
-    # config = configparser.ConfigParser()
-    # config.read(conf_path)
-
     log_path = str(log_dir + '/addon.log')
 
     if config['LOG_LEVEL'] == "info": level = logging.INFO
@@ -720,5 +691,7 @@ if __name__ == '__main__':
     logging.basicConfig(level = level, format = format, handlers = handlers)
 
     daemon = Daemon()
-    daemon.init()
+    if daemon.init() == False:
+        logging.warn("Initilization failed.")
+        return
     daemon.run()
