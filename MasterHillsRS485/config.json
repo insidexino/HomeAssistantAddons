@@ -1,10 +1,11 @@
 {
     "name": "MasterHills HA RS485 Addon",
-    "version": "0.0.4",
+    "version": "0.0.5",
     "slug": "masterhills_wallpad",
     "description": "Wallpad addon for MasterHills",
     "arch": ["armhf", "armv7", "aarch64", "amd64", "i386"],
     "startup": "application",
+    "url": "https://github.com/insidexino/HomeAssistantAddons",
     "boot": "auto",
     "options": {
         "RS485_IP": null,
