@@ -23,7 +23,7 @@ class RS485Sock(socket.socket):
         try:
             super(RS485Sock, self).connect((config['RS485_IP'], config['RS485_PORT']))
         except Exception as e:
-            logging.info('Failed to connect RS485 socket.[{}][{}:{}]'.format(e, config['RS485_IP'], config['RS485_PORT']))
+            logging.warn('Failed to connect RS485 socket.[{}][{}:{}]'.format(e, config['RS485_IP'], config['RS485_PORT']))
             return False
         logging.info('Connected to RS485 socket.')
         self.settimeout(None)
@@ -35,7 +35,7 @@ class RS485Sock(socket.socket):
                 return data
             except Exception as e:
                 logging.error("RS485 socket receive error. :" + str(e))
-                logging.info("Try Reconnect")
+                logging.warn("Try Reconnect")
                 self.connect()
 
     def send(self, data):
@@ -196,7 +196,6 @@ class AllLightsDevice(SwitchDevice):
             # all lights command from wallswitch
             if part == '0eff0100':
                 cmd = packet.get_dev_command()
-                logging.info('check process cmd=' + cmd)
                 if cmd == '65':
                     self.SetMQTTState('off')
                 elif cmd == '66':
