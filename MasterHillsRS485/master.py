@@ -56,7 +56,7 @@ class Device():
         self.state_command = ''
 
     def __str__(self):
-        return self.device_type + '-' + self.device_name 
+        return self.device_type + '-' + self.device_name
 
     def SetGroupName(self, group_name):
         self.group_name = group_name
@@ -64,7 +64,7 @@ class Device():
     def SetStateFromMQTT(self, topic, payload):
         self.SetMQTTState(payload)
         self.Send485(payload)
-    
+
     def SetMQTTState(self, state):
         mqttc.publish(self.state_command, state)
 
@@ -76,7 +76,7 @@ class SwitchDevice(Device):
     def __init__(self, name, icon):
         super().__init__(name)
         self.device_type = 'switch'
-        self.icon = icon 
+        self.icon = icon
 
 class LightDevice(Device):
     def __init__(self, light_group, index):
@@ -85,7 +85,7 @@ class LightDevice(Device):
        self.index = index
        self.state_on = False
        self.light_group = light_group
- 
+
     def Send485(self, payload):
 
         # don't send 485 packet when the payload and current state are the same
@@ -115,7 +115,7 @@ class ThermostatDevice(Device):
        self.action = 'off'
        self.target_temp = 23
        self.current_temp = 20
- 
+
     def Send485(self):
 
         self.thermostat_group.Send485Group(self)
@@ -130,7 +130,7 @@ class ThermostatDevice(Device):
             self.SetMode(payload)
         self.Send485()
 
-        # get state in 10 sec. becuase 
+        # get state in 10 sec. becuase
         # the instant replay cannot reflect current heating state
         threading.Timer(10.0, self.thermostat_group.Send485GetCurrent).start()
 
@@ -150,12 +150,14 @@ class ThermostatDevice(Device):
     def SetMode(self, payload):
         self.mode = payload
 
-    def SetAction(self, heating):
+    def SetAction(self, heating, cooling):
         if self.mode == 'off':
             self.action = 'off'
         else:
-            if heating == 'on':
+            if heating:
                 self.action = 'heating'
+            elif cooling:
+                self.action = 'cooling'
             else:
                 self.action = 'idle'
 
@@ -267,10 +269,11 @@ class DeviceGroup():
             publish_list.append({ha_topic : json.dumps(ha_payload)})
 
 class DeviceThermostatGroup(DeviceGroup):
-    def __init__(self, name, packet_id):
+    def __init__(self, name, packet_id, cool_packet_id):
 
         super().__init__(name)
         self.packet_id = packet_id
+        self.cool_packet_id = cool_packet_id
 
         self.AddDevice(ThermostatDevice(self))
 
@@ -279,8 +282,14 @@ class DeviceThermostatGroup(DeviceGroup):
         if packet.get_dev_part() == self.packet_id and packet.get_dev_command() == '00':
             values = packet.get_value()
 
+            logging.debug("HEAT payload: "+ str(values))
+
             # Termostat group has only one device
             for dev in self.device_list:
+                # don't do anything about heater when AC is on
+                if dev.mode == 'cool':
+                    break
+
                 if values[0:4] == '1100':
                     dev.SetMode('heat')
                     dev.SetTargetTemp(int(values[4:6], 16))
@@ -290,11 +299,30 @@ class DeviceThermostatGroup(DeviceGroup):
                     logging.info('Unknown mode : ' + values)
 
                 dev.SetCurrentTemp(int(values[8:10], 16))
-                dev.SetAction('on' if values[14:16] == '01' else 'off')
+                dev.SetAction(True if values[14:16] == '01' else False, False)
+                dev.SendCurrentStateToMQTT()
+        elif packet.get_dev_part() == self.cool_packet_id and packet.get_dev_command() == '00':
+            values = packet.get_value()
+
+            logging.debug("COOL payload: "+ str(values))
+
+            for dev in self.device_list:
+                # don't do anything about AC when heater is on
+                if dev.mode == 'heat':
+                    break
+
+                if values[0:2] == '10':
+                    dev.SetMode('cool')
+                    dev.SetAction(False, True)
+                else:
+                    dev.SetMode('off')
+                    dev.SetAction(False, False)
+                dev.SetCurrentTemp(int(values[8:10], 16))
+                dev.SetTargetTemp(int(values[10:12], 16))
                 dev.SendCurrentStateToMQTT()
 
     def AppendMQTTListDevice(self, prefix, subscribe_list, publish_list):
-        
+
         for dev in self.device_list:
             ha_topic = '{}/{}/{}/{}/config'.format( \
                 prefix, dev.device_type, self.group_name, dev.device_name)
@@ -322,7 +350,7 @@ class DeviceThermostatGroup(DeviceGroup):
                 'max_temp': 40,
                 'temp_step': 1,
                 # 'modes': ['off', 'heat', 'fan_only'],
-                'modes': ['off', 'heat'],
+                'modes': ['off', 'cool', 'heat'],
                 'uniq_id': '{}_{}'.format(self.group_name, dev.device_name),
                 'device': {
                     'name': 'MS {}'.format(dev.device_name),
@@ -337,32 +365,64 @@ class DeviceThermostatGroup(DeviceGroup):
                 ha_payload['ic'] = dev.icon
             subscribe_list.append((ha_payload['mode_cmd_t'], 0))
             subscribe_list.append((ha_payload['temp_cmd_t'], 0))
-            # subscribe_list.append((ha_payload['away_mode_cmd_t'], 0))
             publish_list.append({ha_topic : json.dumps(ha_payload)})
 
     def Send485Group(self, dev):
-        value = ''
 
-        if dev.mode == 'heat':
-            value += '1100'
-        elif dev.mode == 'off':
-            value += '1101'
-        else:
-            logging.info ('MODE fix!!!')
-            return
+        logging.debug("Thermo send 486 mode : {}".format(dev.mode))
 
-        value += '{0:02x}0000000000'.format( dev.target_temp )
+        if dev.mode != 'cool':
+            # send command for heater
+            value = ''
 
-        p = MSPacket()
-        p.GeneratePacket(self.packet_id, value)
+            if dev.mode == 'heat':
+                value += '1100'
+            elif dev.mode == 'off':
+                value += '1101'
 
-        rs485_sock.send(bytearray.fromhex(p.get_packet()))
+            if len(value) > 0:
+                value += '{0:02x}0000000000'.format( dev.target_temp )
+
+                p = MSPacket()
+                p.GeneratePacket(self.packet_id, value)
+
+                rs485_sock.send(bytearray.fromhex(p.get_packet()))
+
+
+            time.sleep(1)
+
+        if dev.mode != 'heat':
+            # send command for cooler
+            value = ''
+
+            if dev.mode == 'cool':
+                dev.target_temp = 28
+                value += '10'
+            elif dev.mode == 'off':
+                value += '00'
+
+            if len(value) > 0:
+                value += '00000000{0:02x}0000'.format( dev.target_temp )
+
+                p = MSPacket()
+                p.GeneratePacket(self.cool_packet_id, value)
+
+                logging.debug("485 PACKET : {}".format(p.get_packet()))
+
+                rs485_sock.send(bytearray.fromhex(p.get_packet()))
+
+
 
     def Send485GetCurrent(self):
         p = MSPacket()
         p.GeneratePacket(self.packet_id, '0000000000000000', '3a')
         ret = rs485_sock.send(bytearray.fromhex(p.get_packet()))
-        
+
+        time.sleep(1)
+        p = MSPacket()
+        p.GeneratePacket(self.cool_packet_id, '0000000000000000', '3a')
+        ret = rs485_sock.send(bytearray.fromhex(p.get_packet()))
+
     def GetCurrentState(self):
         time.sleep(1)
         self.Send485GetCurrent()
@@ -434,7 +494,7 @@ class Home():
                     return dev
 
         return None
-    
+
     def ProcessPacket(self, packet):
         if packet.is_valid_packet():
             for group in self.group_list:
@@ -445,12 +505,12 @@ class Home():
     def GetCurrentDeviceStates(self):
         for group in self.group_list:
             group.GetCurrentState()
- 
+
 
 class MSPacket():
     def __init__(self):
         self.p = {}
-  
+
     def SetPacket(self, packet):
         self.p['prefix'] = packet[:4].lower()
         self.p['type'] = packet[4:7].lower()
@@ -478,7 +538,7 @@ class MSPacket():
         self.p['value'] = value
         self.p['checksum'] = self.calc_checksum()
         self.p['suffix'] = '0d0d'
- 
+
 
     def __str__(self):
         return str(self.p)
@@ -526,7 +586,7 @@ class MSPacket():
 
 
 class Daemon():
-    def __init__(self):            
+    def __init__(self):
         self._name = 'kocom'
         self.AddHomeDevices()
 
@@ -554,23 +614,23 @@ class Daemon():
         guestroom = DeviceLightGroup('guestroom', 2, '0e030100')
         self.home.AddDeviceGroup(guestroom)
 
-        livingroom = DeviceThermostatGroup('livingroom', '36000100')
+        livingroom = DeviceThermostatGroup('livingroom', '36000100', '39000100')
         self.home.AddDeviceGroup(livingroom)
 
-        bedroom = DeviceThermostatGroup('bedroom', '36010100')
+        bedroom = DeviceThermostatGroup('bedroom', '36010100', '39010100')
         self.home.AddDeviceGroup(bedroom)
 
-        studyroom = DeviceThermostatGroup('studyroom', '36020100')
+        studyroom = DeviceThermostatGroup('studyroom', '36020100', '39020100')
         self.home.AddDeviceGroup(studyroom)
 
-        guestroom = DeviceThermostatGroup('guestroom', '36030100')
+        guestroom = DeviceThermostatGroup('guestroom', '36030100', '39030100')
         self.home.AddDeviceGroup(guestroom)
 
 
     def init(self):
 
         global mqttc
-        global rs485_sock 
+        global rs485_sock
         mqttc = mqtt.Client()
         rs485_sock = RS485Sock()
 
@@ -630,16 +690,16 @@ class Daemon():
         subscribe_list = []
         publish_list = []
         subscribe_list.append(('rs485/bridge/#', 0))
-        
+
         self.home.AppendMQTTList(subscribe_list, publish_list)
-       
+
         logging.debug(subscribe_list)
         logging.debug(publish_list)
         mqttc.subscribe(subscribe_list)
         for ha in publish_list:
             for topic, payload in ha.items():
                 mqttc.publish(topic, payload)
- 
+
     def check_sum(self, packet):
         sum_packet = sum(bytearray.fromhex(packet)[:17])
         v_sum = int(packet[34:36], 16) if len(packet) >= 36 else 0
