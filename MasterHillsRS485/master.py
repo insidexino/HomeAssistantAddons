@@ -23,7 +23,7 @@ class RS485Sock(socket.socket):
         try:
             super(RS485Sock, self).connect((config['RS485_IP'], config['RS485_PORT']))
         except Exception as e:
-            logging.warn('Failed to connect RS485 socket.[{}][{}:{}]'.format(e, config['RS485_IP'], config['RS485_PORT']))
+            logging.warning('Failed to connect RS485 socket.[{}][{}:{}]'.format(e, config['RS485_IP'], config['RS485_PORT']))
             return False
         logging.info('Connected to RS485 socket.')
         self.settimeout(None)
@@ -35,7 +35,7 @@ class RS485Sock(socket.socket):
                 return data
             except Exception as e:
                 logging.error("RS485 socket receive error. :" + str(e))
-                logging.warn("Try Reconnect")
+                logging.warning("Try Reconnect")
                 self.connect()
 
     def send(self, data):
@@ -102,7 +102,7 @@ class LightDevice(Device):
                 logging.info("light send485 off")
                 self.light_group.Send485Group()
         else:
-            logging.warn('Unknown payload : '+ payload)
+            logging.warning('Unknown payload : '+ payload)
             return
 
 class ThermostatDevice(Device):
@@ -658,7 +658,7 @@ class Daemon():
         logging.info('on_message : ' + msg.topic)
         device = self.home.GetDeviceFromMQTT(msg.topic)
         if device is None:
-            logging.warn('Unknown topic : ' + msg.topic)
+            logging.warning('Unknown topic : ' + msg.topic)
         else:
             payload = msg.payload.decode()
             logging.debug("[MQTT] payload: "+ str(payload))
@@ -770,6 +770,6 @@ if __name__ == '__main__':
 
     daemon = Daemon()
     if daemon.init() == False:
-        logging.warn("Initilization failed.")
+        logging.warning("Initilization failed.")
     else:
         daemon.run()
