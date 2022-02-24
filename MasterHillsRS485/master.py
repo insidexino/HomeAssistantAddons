@@ -251,7 +251,7 @@ class DeviceGroup():
                 'name': '{}_{}'.format(self.group_name, dev.device_name),
                 'cmd_t': '{}/{}/{}/{}/set'.format(prefix, dev.device_type, self.group_name, dev.device_name),
                 'stat_t': dev.state_command,
-                'val_tpl': '{{ value }}',
+                # 'val_tpl': '{{ value }}',
                 'pl_on': 'on',
                 'pl_off': 'off',
                 'uniq_id': '{}_{}'.format(self.group_name, dev.device_name),
