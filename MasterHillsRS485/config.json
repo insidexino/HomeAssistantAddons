@@ -1,6 +1,6 @@
 {
     "name": "MasterHills HA RS485 Addon",
-    "version": "0.0.15",
+    "version": "0.0.16",
     "slug": "masterhills_wallpad",
     "description": "Wallpad addon for MasterHills",
     "arch": ["armhf", "armv7", "aarch64", "amd64", "i386"],
@@ -8,9 +8,9 @@
     "url": "https://github.com/insidexino/HomeAssistantAddons",
     "boot": "auto",
     "options": {
-        "RS485_IP": 192.168.50.185,
+        "RS485_IP": "192.168.50.185",
         "RS485_PORT": 8899,
-        "MQTT_IP": 192.168.50.181,
+        "MQTT_IP": "192.168.50.181",
         "MQTT_USER": null,
         "MQTT_PASSWD": null,
         "LOG_LEVEL": "info"
