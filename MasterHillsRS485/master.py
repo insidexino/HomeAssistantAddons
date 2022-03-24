@@ -251,8 +251,10 @@ class DeviceGroup():
                 'name': '{}_{}'.format(self.group_name, dev.device_name),
                 'cmd_t': '{}/{}/{}/{}/set'.format(prefix, dev.device_type, self.group_name, dev.device_name),
                 'stat_t': dev.state_command,
-                'pl_on': 'on',
-                'pl_off': 'off',
+                'command_on_template': 'on',
+                'payload_on': 'on',
+                'command_off_template': 'off',
+                'payload_off': 'off',
                 'uniq_id': '{}_{}'.format(self.group_name, dev.device_name),
                 'device': {
                     'name': 'MS {}'.format(dev.device_name),
