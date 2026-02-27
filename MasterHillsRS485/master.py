@@ -757,6 +757,7 @@ if __name__ == '__main__':
             config = json.load(f, object_pairs_hook=collections.OrderedDict)
     except FileNotFoundError as e:
         print("[ERROR] Cannot open configuration file")
+        sys.exit(1)
 
     log_path = str(log_dir + '/addon.log')
 
