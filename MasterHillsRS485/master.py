@@ -768,9 +768,9 @@ if __name__ == '__main__':
 
     log_path = str(log_dir + '/addon.log')
 
-    if config['LOG_LEVEL'] == "info": level = logging.INFO
     if config['LOG_LEVEL'] == "debug": level = logging.DEBUG
-    if config['LOG_LEVEL'] == "warn": level = logging.WARN
+    elif config['LOG_LEVEL'] == "warn": level = logging.WARN
+    else: level = logging.INFO
 
     format   = '%(asctime)s : %(message)s - LN %(lineno)s'
     handlers = [logging.handlers.RotatingFileHandler(filename = log_path, backupCount = 10, encoding = 'utf-8'), logging.StreamHandler()]
