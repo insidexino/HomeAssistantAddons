@@ -566,7 +566,7 @@ class MSPacket():
         return self.p['command']
 
     def is_valid_packet(self):
-        if self.p['prefix'] != 'aa55'  and self.p['suffix'] != '0d0d':
+        if self.p['prefix'] != 'aa55' or self.p['suffix'] != '0d0d':
             return False
         return self.is_valid_checksum()
 
