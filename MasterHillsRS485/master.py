@@ -773,7 +773,7 @@ if __name__ == '__main__':
     else: level = logging.INFO
 
     format   = '%(asctime)s : %(message)s - LN %(lineno)s'
-    handlers = [logging.handlers.RotatingFileHandler(filename = log_path, backupCount = 10, encoding = 'utf-8'), logging.StreamHandler()]
+    handlers = [logging.handlers.RotatingFileHandler(filename = log_path, maxBytes = 10*1024*1024, backupCount = 10, encoding = 'utf-8'), logging.StreamHandler()]
 
     logging.basicConfig(level = level, format = format, handlers = handlers)
 
