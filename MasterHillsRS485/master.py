@@ -17,6 +17,7 @@ SW_VERSION = 'Masterhills SmartHome v1.0'
 class RS485Sock(socket.socket):
     def __init__(self, *args, **kwargs):
         super(RS485Sock, self).__init__(*args, **kwargs)
+        self._send_lock = threading.Lock()
 
     def connect(self):
         self.settimeout(10)
@@ -41,15 +42,16 @@ class RS485Sock(socket.socket):
                 self.connect()
 
     def send(self, data):
-        while True:
-            try:
-                super(RS485Sock, self).send(data)
-                return
-            except Exception as e:
-                logging.error("RS485 socket send error. :" + str(e))
-                logging.info("Try Reconnect")
-                time.sleep(5)
-                self.connect()
+        with self._send_lock:
+            while True:
+                try:
+                    super(RS485Sock, self).send(data)
+                    return
+                except Exception as e:
+                    logging.error("RS485 socket send error. :" + str(e))
+                    logging.info("Try Reconnect")
+                    time.sleep(5)
+                    self.connect()
 
 
 class Device():
@@ -94,19 +96,20 @@ class LightDevice(Device):
         # don't send 485 packet when the payload and current state are the same
         # this is because HA (maybe) send state packet from time to time
         # if we send 485 packet in such a case, the light works incorrently.
-        if payload == 'on':
-            if self.state_on == False:
-                self.state_on = True
-                logging.info("light send485 on")
-                self.light_group.Send485Group()
-        elif payload == 'off':
-            if self.state_on == True:
-                self.state_on = False
-                logging.info("light send485 off")
-                self.light_group.Send485Group()
-        else:
-            logging.warning('Unknown payload : '+ payload)
-            return
+        with self.light_group._state_lock:
+            if payload == 'on':
+                if self.state_on == False:
+                    self.state_on = True
+                    logging.info("light send485 on")
+                    self.light_group.Send485Group()
+            elif payload == 'off':
+                if self.state_on == True:
+                    self.state_on = False
+                    logging.info("light send485 off")
+                    self.light_group.Send485Group()
+            else:
+                logging.warning('Unknown payload : '+ payload)
+                return
 
 class ThermostatDevice(Device):
     def __init__(self, thermostat_group):
@@ -439,6 +442,7 @@ class DeviceLightGroup(DeviceGroup):
         super().__init__(name)
         self.lights_num = num
         self.packet_id = packet_id
+        self._state_lock = threading.Lock()
 
         for n in range(1, num + 1):
             self.AddDevice(LightDevice(self, n))
@@ -462,14 +466,18 @@ class DeviceLightGroup(DeviceGroup):
 
     def ProcessGroupPacket(self, packet):
         if packet.get_dev_part() == self.packet_id:
-            values = packet.get_value()
-            for num, dev in enumerate(self.device_list):
-                if values[num*2:num*2+2] == 'ff':
-                    dev.state_on = True
-                    dev.SetMQTTState('on')
-                else:
-                    dev.state_on = False
-                    dev.SetMQTTState('off')
+            # skip echoes of our own commands (type 30b)
+            if packet.is_send_type():
+                return
+            with self._state_lock:
+                values = packet.get_value()
+                for num, dev in enumerate(self.device_list):
+                    if values[num*2:num*2+2] == 'ff':
+                        dev.state_on = True
+                        dev.SetMQTTState('on')
+                    else:
+                        dev.state_on = False
+                        dev.SetMQTTState('off')
 
 class Home():
     def __init__(self):
