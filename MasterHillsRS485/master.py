@@ -27,6 +27,7 @@ class RS485Sock(socket.socket):
             return False
         logging.info('Connected to RS485 socket.')
         self.settimeout(None)
+        return True
 
     def recv(self):
         while True:
@@ -641,13 +642,19 @@ class Daemon():
 
         mqttc.username_pw_set(username=config['MQTT_USER'], password=config['MQTT_PASSWD'])
 
-        mqttc.connect(config['MQTT_IP'], 1883, 60)
+        try:
+            mqttc.connect(config['MQTT_IP'], 1883, 60)
+        except Exception as e:
+            logging.error('Failed to connect MQTT: {}'.format(e))
+            return False
         mqttc.loop_start()
 
-        rs485_sock.connect()
+        if rs485_sock.connect() == False:
+            return False
 
         t = threading.Thread(target = self.state_loop)
         t.start()
+        return True
 
 
     def state_loop(self):
