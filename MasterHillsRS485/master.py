@@ -37,6 +37,7 @@ class RS485Sock(socket.socket):
             except Exception as e:
                 logging.error("RS485 socket receive error. :" + str(e))
                 logging.warning("Try Reconnect")
+                time.sleep(5)
                 self.connect()
 
     def send(self, data):
@@ -47,6 +48,7 @@ class RS485Sock(socket.socket):
             except Exception as e:
                 logging.error("RS485 socket send error. :" + str(e))
                 logging.info("Try Reconnect")
+                time.sleep(5)
                 self.connect()
 
 
