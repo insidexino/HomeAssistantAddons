@@ -651,6 +651,7 @@ class Daemon():
         mqttc.on_disconnect = self.on_disconnect
 
         mqttc.username_pw_set(username=config['MQTT_USER'], password=config['MQTT_PASSWD'])
+        mqttc.reconnect_delay_set(min_delay=1, max_delay=30)
 
         while True:
             try:
@@ -704,7 +705,10 @@ class Daemon():
 
 
     def on_disconnect(self, client, userdata, rc):
-        logging.info("[MQTT] Disconnected! : " + str(rc))
+        if rc == 0:
+            logging.info("[MQTT] Disconnected cleanly")
+        else:
+            logging.warning("[MQTT] Unexpected disconnect (rc={}). Auto-reconnecting...".format(rc))
 
     def setup_mqtt_subscribe(self):
         subscribe_list = []
