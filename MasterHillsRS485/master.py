@@ -652,11 +652,13 @@ class Daemon():
 
         mqttc.username_pw_set(username=config['MQTT_USER'], password=config['MQTT_PASSWD'])
 
-        try:
-            mqttc.connect(config['MQTT_IP'], 1883, 60)
-        except Exception as e:
-            logging.error('Failed to connect MQTT: {}'.format(e))
-            return False
+        while True:
+            try:
+                mqttc.connect(config['MQTT_IP'], 1883, 60)
+                break
+            except Exception as e:
+                logging.warning('MQTT connection failed: {}. Retry in 5s...'.format(e))
+                time.sleep(5)
         mqttc.loop_start()
 
         if rs485_sock.connect() == False:

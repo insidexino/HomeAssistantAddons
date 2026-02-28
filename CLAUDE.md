@@ -20,6 +20,12 @@
 - RS485 Bridge IP: 192.168.50.185:8899
 - MQTT Broker: 192.168.50.181:1883
 
+## Versioning
+- Version is in `MasterHillsRS485/config.json` (`"version"` field)
+- **코드 수정 시 반드시 patch 버전을 올려야 함** (예: 0.0.24 → 0.0.25)
+- HA는 version이 변경되어야 업데이트를 감지함 (`ha store refresh` → `ha apps update`)
+- 버전을 안 올리면 `ha apps rebuild`로만 반영 가능 (같은 버전 재빌드)
+
 ## Key Architecture Decisions
 - `"init": false` in config.json - required because HA base image s6-overlay v3 doesn't pass CMD correctly
 - `paho-mqtt<2` pinned - v2 breaks mqtt.Client() API (requires CallbackAPIVersion)
