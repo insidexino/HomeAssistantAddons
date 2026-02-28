@@ -1,7 +1,8 @@
 {
     "name": "MasterHills HA RS485 Addon",
-    "version": "0.0.16",
+    "version": "0.0.24",
     "slug": "masterhills_wallpad",
+    "init": false,
     "description": "Wallpad addon for MasterHills",
     "arch": ["armhf", "armv7", "aarch64", "amd64", "i386"],
     "startup": "application",
