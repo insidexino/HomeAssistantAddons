@@ -121,6 +121,8 @@ class ThermostatDevice(Device):
        self.action = 'off'
        self.target_temp = 23
        self.current_temp = 20
+       self._last_mqtt_payload = None
+       self._last_mqtt_time = 0
 
     def Send485(self):
 
@@ -147,6 +149,14 @@ class ThermostatDevice(Device):
             'target_temp': self.target_temp,
             'current_temp': self.current_temp
         }
+
+        now = time.time()
+        if payload == self._last_mqtt_payload and (now - self._last_mqtt_time) < 5:
+            logging.debug("Skip duplicate MQTT Thermostat {} : {}".format(self.thermostat_group.group_name, str(payload)))
+            return
+
+        self._last_mqtt_payload = payload.copy()
+        self._last_mqtt_time = now
         logging.info("Send MQTT Thermostat {} : {}".format(self.thermostat_group.group_name, str(payload)))
         mqttc.publish(self.state_command, json.dumps(payload))
 
