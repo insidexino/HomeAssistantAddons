@@ -13,6 +13,7 @@ import collections
 import paho.mqtt.client as mqtt
 
 SW_VERSION = 'Masterhills SmartHome v1.0'
+AVAIL_TOPIC = 'homeassistant/masterhills/status'
 
 class RS485Sock(socket.socket):
     def __init__(self, *args, **kwargs):
@@ -272,6 +273,7 @@ class DeviceGroup():
                 'command_off_template': 'off',
                 'payload_off': 'off',
                 'uniq_id': '{}_{}'.format(self.group_name, dev.device_name),
+                'avty_t': AVAIL_TOPIC,
                 'device': {
                     'name': 'MS {}'.format(dev.device_name),
                     'ids': 'MS_{}'.format(dev.device_name),
@@ -369,6 +371,7 @@ class DeviceThermostatGroup(DeviceGroup):
                 # 'modes': ['off', 'heat', 'fan_only'],
                 'modes': ['off', 'cool', 'heat'],
                 'uniq_id': '{}_{}'.format(self.group_name, dev.device_name),
+                'avty_t': AVAIL_TOPIC,
                 'device': {
                     'name': 'MS {}'.format(dev.device_name),
                     'ids': 'MS_{}'.format(dev.device_name),
@@ -662,6 +665,7 @@ class Daemon():
 
         mqttc.username_pw_set(username=config['MQTT_USER'], password=config['MQTT_PASSWD'])
         mqttc.reconnect_delay_set(min_delay=1, max_delay=30)
+        mqttc.will_set(AVAIL_TOPIC, 'offline', retain=True)
 
         while True:
             try:
@@ -686,6 +690,14 @@ class Daemon():
             time.sleep( 5 * 60 )
 
     def on_message(self, client, obj, msg):
+        if msg.topic == 'homeassistant/status':
+            if msg.payload.decode() == 'online':
+                logging.info('[MQTT] HA online detected, re-publishing discovery')
+                mqttc.publish(AVAIL_TOPIC, 'online', retain=True)
+                self.setup_mqtt_subscribe()
+                threading.Thread(target=self.home.GetCurrentDeviceStates).start()
+            return
+
         logging.info('on_message : ' + msg.topic)
         device = self.home.GetDeviceFromMQTT(msg.topic)
         if device is None:
@@ -699,6 +711,7 @@ class Daemon():
     def on_connect(self, client, userdata, flags, rc):
         if int(rc) == 0:
             logging.info("[MQTT] connected OK")
+            mqttc.publish(AVAIL_TOPIC, 'online', retain=True)
             self.setup_mqtt_subscribe()
         elif int(rc) == 1:
             logging.info("[MQTT] 1: Connection refused – incorrect protocol version")
@@ -724,6 +737,7 @@ class Daemon():
         subscribe_list = []
         publish_list = []
         subscribe_list.append(('rs485/bridge/#', 0))
+        subscribe_list.append(('homeassistant/status', 0))
 
         self.home.AppendMQTTList(subscribe_list, publish_list)
 
@@ -732,7 +746,7 @@ class Daemon():
         mqttc.subscribe(subscribe_list)
         for ha in publish_list:
             for topic, payload in ha.items():
-                mqttc.publish(topic, payload)
+                mqttc.publish(topic, payload, retain=True)
 
     def check_sum(self, packet):
         sum_packet = sum(bytearray.fromhex(packet)[:17])
